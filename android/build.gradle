@@ -1,0 +1,55 @@
+// android/build.gradle
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "com.compiledbox.nativeguard"
+    compileSdkVersion 33
+
+    defaultConfig {
+        minSdkVersion 21
+        targetSdkVersion 33
+
+        versionCode 1
+        versionName "1.0.0"
+
+        // If you ever need to expose ProGuard rules to consumers:
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+
+    buildTypes {
+        release {
+            // Disable code shrinking/minification unless you add native libs
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'),
+                          'consumer-rules.pro'
+        }
+    }
+
+    // Java 11 compatibility
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Avoid lint failures in library projects
+    lintOptions {
+        abortOnError false
+    }
+
+    // Workaround for accidental duplicates in React Native deps
+    packagingOptions {
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/LICENSE.txt'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/NOTICE.txt'
+    }
+}
+
+dependencies {
+    // React Native bridge
+    implementation 'com.facebook.react:react-native:+'
+
+    // TODO: add your WireGuard backend here, e.g.:
+    // implementation 'com.wireguard:wireguard-android-library:<version>'
+}

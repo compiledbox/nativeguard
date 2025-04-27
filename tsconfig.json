@@ -1,0 +1,47 @@
+
+{
+  "compilerOptions": {
+    /** Emit ECMAScript target code. */
+    "target": "ESNext",
+
+    /** Module code generation. CommonJS is safest for libraries. */
+    "module": "CommonJS",
+
+    /** JSX support for React Native. */
+    "jsx": "react-native",
+
+    /** Strict type-checking options all on. */
+    "strict": true,
+
+    /** Resolve modules the same way Node does. */
+    "moduleResolution": "node",
+
+    /** Allow default imports from modules with no default export. */
+    "allowSyntheticDefaultImports": true,
+
+    /** Enable interoperability between CommonJS and ES Modules. */
+    "esModuleInterop": true,
+
+    /** Skip type-checking of declaration files. */
+    "skipLibCheck": true,
+
+    /** Ensure consistent casing in file names. */
+    "forceConsistentCasingInFileNames": true,
+
+    /** Where to put compiled `.js` files. */
+    "outDir": "lib",
+
+    /** Where your source `.ts`/`.tsx` files live. */
+    "rootDir": "src",
+
+    /** Generate corresponding `.d.ts` declaration files. */
+    "declaration": true,
+
+    /** Generate sourcemaps alongside `.js` files. */
+    "sourceMap": true
+  },
+  /** Only compile files in `src/`. */
+  "include": ["src"],
+  /** Don't compile dependencies or output dir. */
+  "exclude": ["node_modules", "lib"]
+}

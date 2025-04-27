@@ -1,0 +1,44 @@
+{
+  "name": "nativeguard",
+  "version": "1.0.0",
+  "description": "A React Native native-module for WireGuard VPN integration",
+  "main": "index.js",
+  "types": "lib/index.d.ts",
+  "directories": {
+    "example": "example",
+    "test": "tests"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepare": "npm run build"
+  },
+  "files": [
+    "index.js",
+    "lib/",
+    "android/",
+    "ios/"
+  ],
+  "homepage": "https://compiledbox.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/compiledbox/nativeguard.git"
+  },
+  "keywords": [
+    "react-native",
+    "wireguard",
+    "vpn"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=17.0.0 <20.0.0",
+    "react-native": ">=0.60.0 <1.0.0"
+  },
+  "author": "CompiledBox",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-native": "^0.72.8",
+    "typescript": "^5.8.3"
+  }
+}
