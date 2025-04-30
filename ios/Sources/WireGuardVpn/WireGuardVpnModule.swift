@@ -5,114 +5,133 @@ import NetworkExtension
 @objc(WireGuardVpnModule)
 class WireGuardVpnModule: NSObject {
 
-  // MARK: – React Native Module Setup
-
   @objc
-  static func requiresMainQueueSetup() -> Bool {
-    // No UI, so we can initialize off the main thread.
-    return false
-  }
+  static func requiresMainQueueSetup() -> Bool { false }
 
-  // MARK: – Public API
+  private let manager = NETunnelProviderManager()
 
-  /**
-   Initialize the VPN backend. Must be called before any other method.
-   */
+  // MARK: – Initialize (load existing or create new manager)
+
   @objc(initialize:rejecter:)
   func initialize(_ resolve: @escaping RCTPromiseResolveBlock,
                   rejecter reject: @escaping RCTPromiseRejectBlock) {
-    do {
-      // TODO: Request permissions or set up any services before connecting.
+    NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, error in
+      guard let self = self else { return }
+      if let error = error {
+        reject("INITIALIZE_ERROR", "Failed to load VPN preferences: \(error)", error)
+        return
+      }
+      if let existing = managers?.first {
+        self.manager = existing
+      } else {
+        self.manager = NETunnelProviderManager()
+      }
       resolve(nil)
-    } catch let error {
-      reject("INITIALIZE_ERROR", "Failed to initialize VPN backend: \(error.localizedDescription)", error)
     }
   }
 
-  /**
-   Establish a WireGuard tunnel using the given configuration.
-   */
+  // MARK: – Connect (install/update config & start)
+
   @objc(connect:resolver:rejecter:)
   func connect(_ config: NSDictionary,
                resolver resolve: @escaping RCTPromiseResolveBlock,
                rejecter reject: @escaping RCTPromiseRejectBlock) {
-    // Validate mandatory fields
-    guard let privateKey   = config["privateKey"] as? String, !privateKey.isEmpty else {
-      reject("INVALID_CONFIG", "Missing or empty 'privateKey'", nil); return
-    }
-    guard let publicKey    = config["publicKey"] as? String, !publicKey.isEmpty else {
-      reject("INVALID_CONFIG", "Missing or empty 'publicKey'", nil); return
-    }
-    guard let serverAddr   = config["serverAddress"] as? String, !serverAddr.isEmpty else {
-      reject("INVALID_CONFIG", "Missing or empty 'serverAddress'", nil); return
-    }
-    guard let serverPortNS = config["serverPort"] as? NSNumber else {
-      reject("INVALID_CONFIG", "Missing or invalid 'serverPort'", nil); return
-    }
-    let serverPort = serverPortNS.intValue
-
-    guard let allowedIPs = config["allowedIPs"] as? [String], !allowedIPs.isEmpty else {
-      reject("INVALID_CONFIG", "Missing or empty 'allowedIPs'", nil); return
-    }
-    guard let dns = config["dns"] as? [String], !dns.isEmpty else {
-      reject("INVALID_CONFIG", "Missing or empty 'dns'", nil); return
+    // Build the WireGuard .conf text
+    guard let configText = buildConfigText(config) else {
+      reject("INVALID_CONFIG", "Missing required WireGuard fields", nil)
+      return
     }
 
-    // Optional fields
-    let mtu = (config["mtu"] as? NSNumber)?.intValue ?? 1420
-    let presharedKey = config["presharedKey"] as? String
+    // Create a tunnel protocol
+    let proto = NETunnelProviderProtocol()
+    proto.providerBundleIdentifier = Bundle.main.bundleIdentifier! + ".wgExtension"
+    proto.serverAddress = "WireGuard"  // not used for WG, but required
+    proto.providerConfiguration = ["wgConfig": configText]
 
-    do {
-      // TODO: Build NEPacketTunnelProviderProtocol with these settings
-      //       and start the VPN tunnel.
-      resolve(nil)
-    } catch let error {
-      reject("CONNECT_ERROR", "Error starting VPN: \(error.localizedDescription)", error)
+    manager.protocolConfiguration = proto
+    manager.localizedDescription = "NativeGuard Tunnel"
+    manager.isEnabled = true
+
+    // Save to preferences
+    manager.saveToPreferences { [weak self] error in
+      if let error = error {
+        reject("CONNECT_ERROR", "Failed to save VPN config: \(error)", error)
+        return
+      }
+      // Start the tunnel
+      do {
+        try self?.manager.connection.startVPNTunnel()
+        resolve(nil)
+      } catch let err {
+        reject("CONNECT_ERROR", "Failed to start tunnel: \(err)", err)
+      }
     }
   }
 
-  /**
-   Tear down the active WireGuard tunnel.
-   */
+  // MARK: – Disconnect
+
   @objc(disconnect:rejecter:)
   func disconnect(_ resolve: @escaping RCTPromiseResolveBlock,
                   rejecter reject: @escaping RCTPromiseRejectBlock) {
-    do {
-      // TODO: Stop the NEPacketTunnelProvider tunnel.
-      resolve(nil)
-    } catch let error {
-      reject("DISCONNECT_ERROR", "Error stopping VPN: \(error.localizedDescription)", error)
-    }
+    manager.connection.stopVPNTunnel()
+    resolve(nil)
   }
 
-  /**
-   Retrieve the current tunnel status.
-   */
+  // MARK: – Status
+
   @objc(getStatus:rejecter:)
   func getStatus(_ resolve: @escaping RCTPromiseResolveBlock,
                  rejecter reject: @escaping RCTPromiseRejectBlock) {
-    do {
-      // TODO: Query your tunnel provider for actual status.
-      // Valid values match WireGuardStatus enum in JS.
-      let status = "disconnected"
-      resolve(status)
-    } catch let error {
-      reject("STATUS_ERROR", "Error fetching VPN status: \(error.localizedDescription)", error)
+    let rawStatus = manager.connection.status
+    let statusString: String
+    switch rawStatus {
+    case .invalid:        statusString = "invalid"
+    case .disconnected:   statusString = "disconnected"
+    case .connecting:     statusString = "connecting"
+    case .connected:      statusString = "connected"
+    case .reasserting:    statusString = "reasserting"
+    case .disconnecting:  statusString = "disconnecting"
+    @unknown default:     statusString = "unknown"
     }
+    resolve(statusString)
   }
 
-  /**
-   Check if WireGuard is supported on this device.
-   */
+  // MARK: – Support check
+
   @objc(isDeviceSupported:rejecter:)
   func isDeviceSupported(_ resolve: @escaping RCTPromiseResolveBlock,
                          rejecter reject: @escaping RCTPromiseRejectBlock) {
-    do {
-      // A simple check: can we load NEVPNManager?
-      let supported = NSClassFromString("NEVPNManager") != nil
-      resolve(supported)
-    } catch let error {
-      reject("SUPPORTED_ERROR", "Error checking support: \(error.localizedDescription)", error)
-    }
+    // NEVPNManager is available on iOS 9+
+    let supported = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 9
+    resolve(supported)
+  }
+
+  // MARK: – Helpers
+
+  private func buildConfigText(_ cfg: NSDictionary) -> String? {
+    guard
+      let priv = cfg["privateKey"] as? String,
+      let pub  = cfg["publicKey"]  as? String,
+      let addr = cfg["serverAddress"] as? String,
+      let port = cfg["serverPort"] as? NSNumber,
+      let allowed = cfg["allowedIPs"] as? [String],
+      let dns   = cfg["dns"] as? [String]
+    else { return nil }
+
+    let mtu = (cfg["mtu"] as? NSNumber)?.intValue ?? 1420
+    let ps  = cfg["presharedKey"] as? String
+
+    return """
+    [Interface]
+    PrivateKey = \(priv)
+    MTU = \(mtu)
+
+    [Peer]
+    PublicKey = \(pub)
+    Endpoint = \(addr):\(port.intValue)
+    AllowedIPs = \(allowed.joined(separator: ","))
+    DNS = \(dns.joined(separator: ","))
+    \(ps.map { "PresharedKey = \($0)" } ?? "")
+    """
   }
 }

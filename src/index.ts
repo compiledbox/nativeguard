@@ -1,8 +1,8 @@
 // src/index.ts
 
 import { NativeModules } from 'react-native';
+import { WireGuardError, WireGuardStatus } from './types';
 import type { WireGuardConfig } from './types';
-import { WireGuardStatus, WireGuardError } from './types';
 
 interface NativeGuardNativeModule {
   initialize(): Promise<void>;
@@ -114,5 +114,6 @@ export async function isDeviceSupported(): Promise<boolean> {
   }
 }
 
-export { WireGuardStatus } from './types';
-export type { WireGuardConfig } from './types';
+// Re-export the status enum, config type, and error class
+export { WireGuardStatus, WireGuardError };
+export type { WireGuardConfig };
